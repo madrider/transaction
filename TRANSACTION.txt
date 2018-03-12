@@ -1,0 +1,450 @@
+////////////////exceptions/////////////////
+?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Exceptions
+{
+    public class TransactionException:ApplicationException
+    {
+        //default constructor
+        public TransactionException() : base()
+            { }
+        //parameter constructor which takes one string parameter
+        public TransactionException(string message) : base(message)
+            { }
+        //parameterized constructor which takes two parameters
+        public TransactionException(string message, Exception innerException) : base(message, innerException)
+            { }
+    }
+}
+
+
+////////////////////entity-------/////////////////
+?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Entities
+{
+    public class Transaction
+    {
+        public int TransactionId { get; set; }
+        public string BankName { get; set; }
+        public string IFSCCode { get; set; }
+        public DateTime TransactionDate { get; set; }
+        public int NoOf500Notes { get; set; }
+        public int NoOf1000Notes { get; set; }
+        public int TotalAmount { get; set; }
+    }
+}
+
+///////////////////////dal////////////////////////////////
+
+?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Data;
+using System.Data.SqlClient;
+using System.Configuration;
+using Entities;
+using Exceptions;
+
+namespace DataAccessLayer
+{
+    class DataConnection
+    {
+
+        //function to create command object by assigning connection
+        public static SqlCommand GenerateCommand()
+        {
+            SqlCommand objCmd = null;
+            try
+            {
+                //creating connection object
+                SqlConnection objCon = new SqlConnection(ConfigurationManager.ConnectionStrings["RBI_Demonetization"].ConnectionString);
+                //creating command object
+                objCmd = new SqlCommand();
+
+                //assigning common properties to command
+                objCmd.CommandType = CommandType.StoredProcedure;
+                objCmd.Connection = objCon;
+            }
+
+            catch (SqlException objSqlEx)
+            {
+                throw new TransactionException(objSqlEx.Message);
+
+            }
+            catch (Exception objEx)
+            {
+                throw new TransactionException(objEx.Message);
+
+            }
+            return objCmd;
+        }
+    }
+}
+
+////////////////////?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Data;
+using Entities;
+using Exceptions;
+using System.Data.SqlClient;
+using System.Data;
+
+
+namespace DataAccessLayer
+{
+    public class TransactionDAL
+    {
+        public List<Transaction> DisplayDetails()
+        {
+            List<Transaction> objTransactions;
+            try
+            {
+                SqlCommand objCom = DataConnection.GenerateCommand();
+                objCom.CommandText = "usp_DisplayDemonetizeDetails";
+                objCom.Connection.Open();
+
+                SqlDataReader objDR = objCom.ExecuteReader();
+                if (objDR.HasRows == true)
+                {
+                    objTransactions = new List<Transaction>();
+                    while (objDR.Read())
+                    {
+                        Transaction objTransaction = new Transaction();
+                       objTransaction.TransactionId = Convert.ToInt32(objDR[0]);
+                       objTransaction.BankName = objDR[1].ToString();
+                       objTransaction.IFSCCode = objDR[2].ToString();
+                       objTransaction.TransactionDate = Convert.ToDateTime(objDR[3]);
+                       objTransaction.NoOf500Notes = Convert.ToInt32(objDR[4]);
+                       objTransaction.NoOf1000Notes = Convert.ToInt32(objDR[5]);
+                       objTransaction.TotalAmount = Convert.ToInt32(objDR[6]);
+
+                        objTransactions.Add(objTransaction);
+
+                    }
+                    objCom.Connection.Close();
+                    return objTransactions;
+                }
+                else
+                {
+                    return null;
+                }
+
+            }
+
+            catch (SqlException objSqlEx)
+            {
+                throw new TransactionException(objSqlEx.Message);
+
+            }
+            catch (Exception objEx)
+            {
+                throw new TransactionException(objEx.Message);
+
+            }
+
+        }
+        public bool InsertDetails(Transaction objTransaction)
+        {
+            try
+            {
+
+                //
+                SqlCommand objCom = DataConnection.GenerateCommand();
+                objCom.CommandText = "usp_InsertDemonetizeDetails";
+                //creating parameters
+              
+                objCom.Parameters.AddWithValue("@BankName",objTransaction.BankName);
+                objCom.Parameters.AddWithValue("@IFSCCode", objTransaction.IFSCCode);
+                objCom.Parameters.AddWithValue("@TransactionDate",objTransaction.TransactionDate);
+                objCom.Parameters.AddWithValue("@NoOf500Notes", objTransaction.NoOf500Notes);
+                objCom.Parameters.AddWithValue("@NoOf1000Notes", objTransaction.NoOf1000Notes);
+            
+                //                
+                objCom.Connection.Open();
+                int noOfRowsAffected = objCom.ExecuteNonQuery();
+                objCom.Connection.Close();
+                if (noOfRowsAffected > 0)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+
+            }
+            catch (SqlException objSqlEx)
+            {
+                throw new TransactionException(objSqlEx.Message);
+
+            }
+            catch (Exception objEx)
+            {
+                throw new TransactionException(objEx.Message);
+
+            }
+
+
+
+
+        }
+    }
+}
+
+///////blllll///////////////////?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Entities;
+using Exceptions;
+using DataAccessLayer;
+using System.Text.RegularExpressions;
+using System.Data;
+
+namespace BusinessLayer
+{
+    public class TransactionBL
+    {
+        //check for transaction entity for correct values
+        public bool Validation(Transaction objTrans)
+        {
+            bool isValid = true;
+            StringBuilder sb = new StringBuilder();
+
+            if (objTrans.BankName == string.Empty)
+            {
+                sb.Append("bank name canot be empty");
+                isValid = false;
+            }
+            if (objTrans.IFSCCode == string.Empty)
+            {
+                sb.Append("IFSC code canot be empty");
+                isValid = false;
+            }
+            if (objTrans.TransactionDate == null)
+            {
+                sb.Append("Date cannot be empty ");
+                isValid = false;
+            }
+            //if (!(objTrans.TransactionDate >= '08-11-2016' && objTrans.TransactionDate <= '31-12-2016'))
+            //{
+            //    sb.Append("date should be between 8th november 2016 to 31st december 2016");
+            //    isValid = false;
+            //}
+            if (objTrans.NoOf500Notes.ToString()==string.Empty)
+            {
+                sb.Append("No Of 500 Notes deposited must be specified");
+                isValid = false;
+            }
+            if (objTrans.NoOf1000Notes.ToString() ==string.Empty)
+            {
+                sb.Append("No Of 1000 Notes deposited must be specified");
+                isValid = false;
+            }
+            if (isValid == false)
+            {
+                throw new TransactionException(sb.ToString());
+            }
+            return isValid;
+        }
+
+        //a method to add a new transaction
+        public bool InsertDetails(Transaction objTrans)
+        {
+            bool result = false;
+            //checking if the transaction object is valid
+            if (Validation(objTrans))
+            {
+                //creating DAL class object
+                TransactionDAL objTransactionDAL = new TransactionDAL();
+                //invoking its InsertDetails method
+                result = objTransactionDAL.InsertDetails(objTrans);
+            }
+            return result;
+        }
+        public List<Transaction> DisplayDetails()
+        {
+            List<Transaction> objTransactions = null;
+            TransactionDAL objTransactionDAL = new TransactionDAL();
+
+            try
+            {
+               objTransactions= objTransactionDAL.DisplayDetails();
+            }
+            catch (TransactionException ex)
+            {
+                throw ex;
+            }
+            catch (SystemException ex)
+            {
+                throw ex;
+            }
+
+            return objTransactions;
+        }
+        public int GetTotalAmount(int noOf500Notes, int noOf1000Notes)
+        {
+
+            int totalAmount = ((noOf500Notes * 500) + (noOf1000Notes * 1000));
+            return totalAmount;
+        }
+
+
+
+
+    }
+}
+
+
+
+////////////////////////plllll////////////////////////////
+
+?using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
+using BusinessLayer;
+using System.Data;
+using Entities;
+using Exceptions;
+
+namespace PresentationLayer
+{
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
+    public partial class MainWindow : Window
+    {
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        //method for inserting details
+        private void btnSaveDetails_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+
+                string bankName = cbBankName.SelectedValue.ToString();
+                string IFSC = txtIFSCCode.Text;
+                int noOf500Notes = Convert.ToInt32(txtNoOf500Notes.Text);
+                int noOf1000Notes = Convert.ToInt32(txtNoOf1000Notes.Text);
+                DateTime transactionDate = Convert.ToDateTime(dpTransactionDate.ToString());
+
+                Transaction objTransaction = new Transaction
+                {
+
+                    BankName = bankName,
+                    IFSCCode = IFSC,
+                    NoOf500Notes = noOf500Notes,
+                    NoOf1000Notes = noOf1000Notes,
+                    TransactionDate = transactionDate
+
+
+                 };
+            //
+            TransactionBL objTransactionBL = new TransactionBL();
+            bool InsertFlag = objTransactionBL.InsertDetails(objTransaction);
+            if (InsertFlag == true)
+            {
+                MessageBox.Show("record inserted  successfully");
+            }
+
+
+        }
+            catch (TransactionException objEx)
+            {
+
+                MessageBox.Show(objEx.Message);
+            }
+
+        }
+
+        private void btnDisplayDetails_Click(object sender, RoutedEventArgs e)
+        {
+            TransactionBL objEmployeeBL = new TransactionBL();
+            try
+            {
+                List<Transaction> objTransactions = objEmployeeBL.DisplayDetails();
+
+                if (objTransactions== null || objTransactions.Count <= 0)
+                    throw new TransactionException("Records not available");
+                else
+                {
+                    dgTransactionDetails.DataContext = objTransactions;
+                }
+            }
+            catch (TransactionException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            catch (SystemException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+
+        }
+
+        private void btnClear_Click(object sender, RoutedEventArgs e)
+        {
+            cbBankName.Text = "";
+            txtIFSCCode.Text = "";
+            txtNoOf500Notes.Text = "";
+            txtNoOf1000Notes.Text = "";
+            txtTotalAmount.Text = "";
+            dpTransactionDate = null;
+
+        }
+
+        private void dpTransactionDate_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var picker = sender as DatePicker;
+            DateTime? date = picker.SelectedDate;
+
+            if (date == null)
+            {
+                this.Title = "No date";
+            }
+            else
+            {
+                this.Title = date.Value.ToShortDateString();
+            }
+        }
+
+        private void txtNoOf1000Notes_LostFocus(object sender, RoutedEventArgs e)
+        {
+            TransactionBL obj = new TransactionBL();
+            int noOf500Notes = Convert.ToInt32(txtNoOf500Notes.Text);
+            int noOf1000Notes = Convert.ToInt32(txtNoOf1000Notes.Text);
+            int totalAmount =obj.GetTotalAmount(noOf500Notes, noOf1000Notes);
+          txtTotalAmount.Text = totalAmount.ToString();
+        }
+    }
+}
+
